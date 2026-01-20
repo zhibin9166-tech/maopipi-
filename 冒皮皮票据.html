@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>票据&宠物买卖合同生成工具（最终稳定版-PDF高清）</title>
+    <!-- 保留原有所有依赖，仅用一维条码 -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <style>
+        .container { max-width: 850px; margin: 20px auto; }
+        .form { margin: 0 0 30px 0; }
+        .form div { margin: 12px 0; display: flex; align-items: center; gap: 10px; }
+        .form label { width: 100px; font-size: 10.5px; color: #bd2626; }
+        .form input, .form select { padding: 8px; flex: 1; border: 1px solid #ddd; border-radius: 4px; font-size: 10.5px; color: #bd2626; }
+        .form textarea { padding: 8px; flex: 1; border: 1px solid #ddd; border-radius: 4px; resize: none; height: 56px; font-size: 14px; color: #bd2626; }
+        .amount-group { display: flex; gap: 8px !important; align-items: center; }
+        .amount-group select, .amount-group input { flex: none !important; }
+        .amount-group select { width: 90px; }
+        .amount-group input { width: 180px; }
+        button { 
+            padding: 10px 20px; background: #bd2626; color: #fff; 
+            border: none; border-radius: 4px; cursor: pointer;
+            margin-right: 10px; font-size: 10.5px;
+        }
+        button:hover { background: #a02020; }
+        .button.secondary { background: #6c757d; }
+        .button.secondary:hover { background: #5a6268; }
+        .preview-title { font-size: 13.5px; font-weight: bold; color: #bd2626; margin: 40px 0 10px 0; padding-bottom: 5px; border-bottom: 2px solid #bd2626; }
+        .bill-code-suffix { width: 60px !important; text-align: center; }
+        .bill-code-prefix { flex: none; width: 200px; color: #bd2626; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #f5f5f5; font-size: 10.5px; }
+        #ticketTemplate {
+            width: 1588px;
+            height: 2246px;
+            margin: 20px auto;
+            position: relative;
+            background: url("https://17440061.s21i.faiusr.com/4/ABUIABAEGAAg47K3ywYowKnprQQwmiU4zzQ.png") no-repeat center center;
+            background-size: cover;
+            background-color: #fff;
+            border: 1px solid #eee;
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-optimize-contrast;
+            will-change: background;
+        }
+        .ticket-text { 
+            position: absolute; color: #bd2626; 
+            font-family: "宋体", SimSun, sans-serif; 
+            font-size: 24px;
+            font-weight: bold;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+        }
+        .ticket-remark {
+            font-size: 22px !important;
+            white-space: normal;
+            line-height: 1.4;
+            width: 900px;
+            font-family: "宋体", SimSun, sans-serif !important;
+            font-weight: bold !important;
+            color: #bd2626 !important;
+        }
+        .contract-page {
+            width: 1588px;
+            height: 2246px;
+            margin: 20px auto;
+            position: relative;
+            background-color: #fff;
+            border: 1px solid #eee;
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+            image-rendering: -webkit-optimize-contrast;
+        }
+        .contract-fill {
+            position: absolute;
+            font-family: "宋体", SimSun, sans-serif;
+            font-size: 21px;
+            color: #bd2626;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: normal;
+            max-width: 100%;
+            -webkit-font-smoothing: antialiased;
+        }
+        .contract-fill-double {
+            position: absolute;
+            font-family: "宋体", SimSun, sans-serif;
+            font-size: 21px;
+            color: #bd2626;
+            line-height: 1.2;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-width: 100%;
+            -webkit-font-smoothing: antialiased;
+        }
+        .contract-fill-double span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #c_additional {
+            line-height: 1.5;
+            word-wrap: break-word;
+            word-break: break-all;
+            font-size: 21px !important;
+            color: #bd2626 !important;
+        }
+        .submit-btn { background: #28a745 !important; }
+        .submit-btn:hover { background: #218838 !important; }
+        .view-btn { background: #17a2b8 !important; }
+        .view-btn:hover { background: #138496 !important; }
+        .export-btn { background: #ffc107 !important; color: #333 !important; }
+        .export-btn:hover { background: #e0a800 !important; }
+        .submit-toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; background: #28a745; color: #fff;
+            border-radius: 4px; font-size: 14px;
+            z-index: 9999; display: none;
+        }
+        .record-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 10000; display: none;
+        }
+        .modal-content {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 80%; max-width: 1000px; max-height: 80vh;
+            background: #fff; border-radius: 8px; padding: 20px;
+            overflow-y: auto;
+        }
+        .modal-title {
+            font-size: 18px; font-weight: bold; color: #bd2626;
+            margin: 0 0 20px 0; padding-bottom: 10px; border-bottom: 1px solid #eee;
+        }
+        .record-item {
+            padding: 12px; border-bottom: 1px solid #f5f5f5;
+        }
+        .record-header {
+            font-weight: bold; color: #28a745; margin-bottom: 8px;
+        }
+        .record-detail {
+            font-size: 14px; line-height: 1.6;
+        }
+        .close-modal {
+            position: absolute; top: 15px; right: 20px;
+            font-size: 24px; cursor: pointer; color: #666;
+        }
+        .close-modal:hover { color: #bd2626; }
+        #barcodeContainer {
+            position: absolute;
+            left: 50px;    
+            top: 50px;     
+            z-index: 999;  
+            width: 200px;
+            height: 80px;
+        }
+        /* 新增：条码密文样式 - 紧贴条码下方，不遮挡原有内容，仅显示密文（黑色） */
+        .barcode-text-display {
+            position: absolute;
+            left: 50px;
+            top: 130px; /* 条码容器top+height，刚好在条码下方 */
+            z-index: 999;
+            width: 200px;
+            text-align: center;
+            font-size: 12px;
+            color: #000; /* 黑色文字 */
+            font-family: "宋体", SimSun, sans-serif;
+            user-select: all; /* 一键全选复制 */
+            background: #fff; /* 白底防遮挡 */
+            padding: 2px 0;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="form">
+            <div><label>日期：</label><input type="date" id="date" value="2026-01-19" onchange="updateBillCodePrefix();updateAll()" oninput="updateBillCodePrefix();updateAll()"></div>
+            <div>
+                <label>票据编号：</label>
+                <span class="bill-code-prefix" id="billCodePrefix">SJ20260119</span>
+                <input type="number" id="billCodeSuffix" class="bill-code-suffix" placeholder="000" value="101" min="0" max="999" oninput="formatBillCodeSuffix();updateAll()" onchange="formatBillCodeSuffix();updateAll()">
+                <input type="hidden" id="billNo" value="SJ20260119101">
+            </div>
+            <div><label>查询码：</label><input type="text" id="queryCode" placeholder="6位随机码，可手动修改" value="" oninput="updateAll()"></div>
+            <div><label>付款人（甲方）：</label><input type="text" id="payer" value="Sophyybian" oninput="updateAll()"></div>
+            <div><label>收款人（乙方）：</label><input type="text" id="seller" placeholder="请输入乙方姓名/名称" value="唐雪松" oninput="updateAll()"></div>
+            <div><label>款项内容：</label><select id="payment" onchange="updateAll()">
+                <option value="宠物排队定金">宠物排队定金</option>
+                <option value="宠物购买押金">宠物购买押金</option>
+                <option value="宠物购买尾款">宠物购买尾款</option>
+            </select></div>
+            <div class="amount-group"><label>金额（小）：</label>
+                <select id="currency" value="CNY" onchange="updateAll()">
+                    <option value="CNY">CNY（人民币）</option>
+                    <option value="USD">USD（美金）</option>
+                    <option value="EUR">EUR（欧元）</option>
+                    <option value="GBP">GBP（英镑）</option>
+                </select>
+                <input type="number" id="amountNum" value="2000.00" step="0.01" min="0" oninput="numToChinese();updateAll()">
+            </div>
+            <div><label>金额（大）：</label><input type="text" id="amountU" value="贰仟元整" readonly></div>
+            <div><label>总价含运费：</label><select id="freight" onchange="updateAll()">
+                <option value="包含">包含</option>
+                <option value="不包含">不包含</option>
+            </select></div>
+            <div><label>备注1（补充）：</label><textarea id="remark1" placeholder="支持多行，同步至合同附加条款" oninput="updateAll()">无</textarea></div>
+            <div><label>备注2（须知）：</label><input type="text" id="remark2" value="须知：排队定金不退不转，直到家长选到满意的小狗为止" oninput="updateAll()" style="font-size:14px;color:#bd2626;"></div>
+            <div><label>&nbsp;</label>
+                <button onclick="fillTicketOnly()">仅填充票据</button>
+                <button onclick="genTicketPNG()">生成票据PNG</button>
+                <button onclick="genTicketPDF()">生成票据PDF</button>
+                <button class="secondary" onclick="fillContractOnly()">仅填充合同</button>
+                <button class="secondary" onclick="genContractPDF()">生成合同PDF</button>
+                <button class="submit-btn" onclick="saveToLocal()">保存数据到本地</button>
+                <button class="view-btn" onclick="viewLocalRecords()">查看本地数据</button>
+                <button class="export-btn" onclick="exportLocalRecords()">导出本地数据</button>
+            </div>
+        </div>
+        <div class="preview-title">票据预览区</div>
+        <div id="ticketTemplate">
+            <!-- 沿用原有条码容器，不改动位置和样式 -->
+            <div id="barcodeContainer">
+                <canvas id="barcodeCanvas" width="200" height="80"></canvas>
+            </div>
+            <!-- 新增：仅显示条码密文（无前缀文字，黑色） -->
+            <div class="barcode-text-display" id="barcodeTextDisplay"></div>
+            <div class="ticket-text" style="left:240px;top:309px;" id="t_date"></div>
+            <div class="ticket-text" style="left:356px;top:350px;" id="t_billNo"></div>
+            <div class="ticket-text" style="left:1312px;top:351px;" id="t_queryCode"></div>
+            <div class="ticket-text" style="left:376px;top:413px;" id="t_payer"></div>
+            <div class="ticket-text" style="left:376px;top:541px;" id="t_payment"></div>
+            <div class="ticket-text" style="left:376px;top:665px;" id="t_amountL"></div>
+            <div class="ticket-text" style="left:1060px;top:665px;" id="t_amountU"></div>
+            <div class="ticket-text ticket-remark" style="left:376px;top:736px;" id="t_remark1"></div>
+            <div class="ticket-text ticket-remark" style="left:376px;top:816px;" id="t_remark2"></div>
+        </div>
+        <div class="preview-title">合同预览区（第一页）</div>
+        <div id="contractPage1" class="contract-page" style="background-image: url('https://17440061.s21i.faiusr.com/2/ABUIABACGAAg55i5ywYo8KSSuwEwmiU4zzQ.jpg');">
+            <div class="contract-fill-double" style="left:350px;top:312px;width:320px;height:72px;" id="c_payer">
+                <span></span><span></span>
+            </div>
+            <div class="contract-fill" style="left:350px;top:405px;width:320px;height:36px;" id="c_seller"></div>
+            <div class="contract-fill" style="left:970px;top:321px;width:240px;height:36px;" id="c_billNo"></div>
+            <div class="contract-fill" style="left:390px;top:1650px;width:360px;height:36px;" id="c_freight"></div>
+            <div class="contract-fill" style="left:760px;top:670px;width:360px;height:36px;" id="c_deposit"></div>
+            <div class="contract-fill" style="left:760px;top:720px;width:360px;height:36px;" id="c_balance"></div>
+            <div class="contract-fill" style="left:360px;top:1300px;width:160px;height:36px;" id="c_transport"></div>
+        </div>
+        <div class="preview-title">合同预览区（第二页）</div>
+        <div id="contractPage2" class="contract-page" style="background-image: url('https://17440061.s21i.faiusr.com/2/ABUIABACGAAggZm5ywYouM2KuQEwmiU4zzQ.png');">
+            <div class="contract-fill" style="left:220px;top:980px;width:1160px;height:200px;" id="c_additional"></div>
+            <div class="contract-fill" style="left:220px;top:1700px;width:320px;height:36px;" id="c_payerSign"></div>
+            <div class="contract-fill" style="left:960px;top:1700px;width:320px;height:36px;" id="c_sellerSign"></div>
+        </div>
+    </div>
+    <div class="submit-toast" id="submitToast">数据保存成功！已存储至本地</div>
+    <div class="record-modal" id="recordModal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeRecordModal()">&times;</span>
+            <h3 class="modal-title">本地存储台账记录</h3>
+            <div id="recordList"></div>
+        </div>
+    </div>
+
+    <script>
+        // 专属盐值（和验证端保持一致）
+        const SALT = "Ma0PiPi_2026@PetBill";
+
+        // 核心：生成加密一维条码内容（沿用SHA256+异或混淆+加权校验，适配一维条码）
+        function generateEncryptedBarcodeContent() {
+            try {
+                const billNo = document.getElementById('billNo').value.trim() || '未知编号';
+                const queryCode = document.getElementById('queryCode').value.trim() || '000000';
+                const amount = parseFloat(document.getElementById('amountNum').value).toFixed(2) || '0.00';
+                const partyA = document.getElementById('payer').value.trim() || '未知甲方';
+                const partyB = document.getElementById('seller').value.trim() || '唐雪松';
+                const date = document.getElementById('date').value.trim() || new Date().toLocaleDateString();
+                
+                // 1. 拼接收据核心原始数据
+                const rawData = `${billNo}|${queryCode}|${amount}|${partyA}|${partyB}|${date}`;
+                // 2. SHA256工业级哈希加密（取前32位，适配一维条码长度）
+                const sha256Hash = CryptoJS.SHA256(rawData).toString().substring(0, 32);
+                // 3. 异或混淆：用盐值对哈希值做位运算（简化为前16位，避免条码过长）
+                let xorMixed = "";
+                for (let i = 0; i < 16; i++) {
+                    xorMixed += String.fromCharCode(sha256Hash.charCodeAt(i) ^ SALT.charCodeAt(i % SALT.length));
+                }
+                // 4. Base64编码（取前20位，确保一维条码可识别）
+                const encodedMixed = btoa(xorMixed).substring(0, 20);
+                // 5. 生成加权校验位（4位）
+                let checkSum = 0;
+                for (let i = 0; i < rawData.length; i++) {
+                    checkSum += rawData.charCodeAt(i) * (i + 1);
+                }
+                const checkCode = (checkSum % 10000).toString().padStart(4, '0');
+                // 6. 最终加密内容（总长度24位，适合CODE128一维条码）
+                return `MA${encodedMixed}${checkCode}`;
+            } catch (error) {
+                console.error('生成加密条码内容失败：', error);
+                // 容错：返回票据编号+查询码（确保条码显示）
+                return `SJ${document.getElementById('billNo').value}${document.getElementById('queryCode').value}`.substring(0, 24);
+            }
+        }
+
+        // 生成一维条码（沿用原有容器，不改动样式）+ 仅显示条码密文（无前缀文字，黑色）
+        function generateBarcode() {
+            try {
+                const barcodeContent = generateEncryptedBarcodeContent();
+                // 清空画布重新生成
+                const canvas = document.getElementById('barcodeCanvas');
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 一维条码配置（CODE128格式，适配原有容器大小）
+                JsBarcode("#barcodeCanvas", barcodeContent, {
+                    format: "CODE128", // 一维条码标准格式
+                    width: 3,          // 条码线宽（适配原有大小）
+                    height: 80,        // 条码高度（和容器一致）
+                    color: "#bd2626",  // 条码颜色（和票据主色一致）
+                    displayValue: false, // 不显示文字，只显示条码
+                    textMargin: 0,
+                    margin: 0
+                });
+
+                // 仅显示条码密文（无前缀文字，黑色）
+                document.getElementById('barcodeTextDisplay').innerText = barcodeContent;
+            } catch (error) {
+                console.error('一维条码生成失败：', error);
+                // 失败时显示占位文字（黑色）
+                const canvas = document.getElementById('barcodeCanvas');
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#bd2626';
+                ctx.font = '12px SimSun';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('条码生成失败', 100, 35);
+                ctx.fillText('刷新页面重试', 100, 55);
+                // 密文区显示错误提示（黑色）
+                document.getElementById('barcodeTextDisplay').innerText = '条码生成失败';
+            }
+        }
+
+        // 生成6位查询码
+        function generateQueryCode() {
+            const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            let code = '';
+            for (let i = 0; i < 6; i++) {
+                code += chars[Math.floor(Math.random() * chars.length)];
+            }
+            return code;
+        }
+
+        // 数字转大写金额
+        function numToChinese() {
+            const num = parseFloat(document.getElementById('amountNum').value);
+            if (isNaN(num) || num < 0) {
+                document.getElementById('amountU').value = "";
+                return;
+            }
+            const digit = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
+            const unit = ['', '拾', '佰', '仟', '万', '拾', '佰', '仟', '亿'];
+            const [integer, decimal] = num.toFixed(2).split('.');
+            let intStr = '';
+            for (let i = 0; i < integer.length; i++) {
+                const n = parseInt(integer[i]);
+                const pos = integer.length - 1 - i;
+                intStr += digit[n] + (n === 0 ? '' : unit[pos]);
+            }
+            intStr = intStr.replace(/零+/g, '零').replace(/零$/, '').replace(/^$/, '零');
+            let chinese = intStr + '元';
+            if (decimal === '00') {
+                chinese += '整';
+            } else {
+                chinese += (decimal[0] !== '0' ? digit[parseInt(decimal[0])] + '角' : '');
+                chinese += (decimal[1] !== '0' ? digit[parseInt(decimal[1])] + '分' : '');
+            }
+            document.getElementById('amountU').value = chinese;
+        }
+
+        // 更新票据编号前缀
+        function updateBillCodePrefix() {
+            const dateVal = document.getElementById('date').value;
+            const dateNoLine = dateVal ? dateVal.replace(/-/g, '') : '';
+            const prefix = 'SJ' + dateNoLine;
+            document.getElementById('billCodePrefix').innerText = prefix;
+            formatBillCodeSuffix();
+        }
+
+        // 格式化票据编号后缀（补0为3位）
+        function formatBillCodeSuffix() {
+            const prefix = document.getElementById('billCodePrefix').innerText;
+            let suffix = document.getElementById('billCodeSuffix').value || '000';
+            suffix = parseInt(suffix) || 0;
+            suffix = suffix.toString().padStart(3, '0');
+            document.getElementById('billCodeSuffix').value = suffix;
+            const fullBillNo = prefix + suffix;
+            document.getElementById('billNo').value = fullBillNo;
+        }
+
+        // 仅填充票据数据
+        function fillTicketOnly() {
+            const currency = document.getElementById('currency').value;
+            const amountNum = parseFloat(document.getElementById('amountNum').value).toFixed(2);
+            const amountLText = `${currency} ${amountNum}`;
+            numToChinese();
+            document.getElementById('t_date').innerText = document.getElementById('date').value;
+            document.getElementById('t_billNo').innerText = document.getElementById('billNo').value;
+            document.getElementById('t_queryCode').innerText = document.getElementById('queryCode').value;
+            document.getElementById('t_payer').innerText = document.getElementById('payer').value;
+            document.getElementById('t_payment').innerText = document.getElementById('payment').value;
+            document.getElementById('t_amountL').innerText = amountLText;
+            document.getElementById('t_amountU').innerText = document.getElementById('amountU').value;
+            document.getElementById('t_remark1').innerText = document.getElementById('remark1').value;
+            document.getElementById('t_remark2').innerText = document.getElementById('remark2').value;
+            
+            // 生成一维条码（仅显示条码密文）
+            setTimeout(generateBarcode, 100);
+            
+            alert('票据数据填充完成！\n✅一维条码已生成（左上方区域）\n✅条码下方直接显示可复制条码密文（黑色）\n✅所有字段位置和功能保持不变');
+        }
+
+        // 仅填充合同数据
+        function fillContractOnly() {
+            const payer = document.getElementById('payer').value;
+            const payerLines = document.querySelectorAll('#c_payer span');
+            payerLines[0].innerText = payer.length > 8 ? payer.substring(0, 8) : payer;
+            payerLines[1].innerText = payer.length > 8 ? payer.substring(8) : '';
+            document.getElementById('c_billNo').innerText = document.getElementById('billNo').value;
+            document.getElementById('c_seller').innerText = document.getElementById('seller').value || '唐雪松';
+            document.getElementById('c_freight').innerText = document.getElementById('freight').value;
+            document.getElementById('c_additional').innerText = document.getElementById('remark1').value || '无';
+            alert('合同所有字段填充完成！\n✅甲方双行姓名（向上移2px）\n✅合同票据编号（累计向下移7px）\n✅乙方姓名（默认唐雪松）\n✅附加条款（与合同票据编号同样式）');
+        }
+
+        // 生成票据PNG
+        function genTicketPNG() {
+            fillTicketOnly();
+            // 延迟生成，确保条码和条码密文渲染完成
+            setTimeout(() => {
+                html2canvas(document.getElementById('ticketTemplate'), {
+                    scale: 4,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#fff',
+                    letterRendering: true,
+                    logging: false,
+                    timeout: 10000,
+                    imageTimeout: 10000,
+                    onclone: (cloneDoc) => {
+                        const ticketClone = cloneDoc.getElementById('ticketTemplate');
+                        ticketClone.style.backgroundImage = 'url("https://17440061.s21i.faiusr.com/4/ABUIABAEGAAg47K3ywYowKnprQQwmiU4zzQ.png")';
+                        ticketClone.style.backgroundSize = 'cover';
+                    }
+                }).then(canvas => {
+                    const a = document.createElement('a');
+                    a.href = canvas.toDataURL('image/png', 1.0);
+                    a.download = `票据_${document.getElementById('billNo').value}.png`;
+                    a.click();
+                });
+            }, 500);
+        }
+
+        // 生成票据PDF
+        function genTicketPDF() {
+            fillTicketOnly();
+            // 延迟生成，确保条码和条码密文渲染完成
+            setTimeout(() => {
+                html2canvas(document.getElementById('ticketTemplate'), {
+                    scale: 4,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#fff',
+                    letterRendering: true,
+                    logging: false,
+                    timeout: 10000,
+                    imageTimeout: 10000,
+                    onclone: (cloneDoc) => {
+                        const ticketClone = cloneDoc.getElementById('ticketTemplate');
+                        ticketClone.style.backgroundImage = 'url("https://17440061.s21i.faiusr.com/4/ABUIABAEGAAg47K3ywYowKnprQQwmiU4zzQ.png")';
+                        ticketClone.style.backgroundSize = 'cover';
+                    }
+                }).then(canvas => {
+                    const pdf = new jspdf.jsPDF('p', 'px', [794, 1123]);
+                    pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, 794, 1123, '', 'NONE');
+                    const ticketPdfName = `MAOPIPI ${document.getElementById('billNo').value} 收款收据.pdf`;
+                    pdf.save(ticketPdfName);
+                });
+            }, 500);
+        }
+
+        // 生成合同PDF
+        async function genContractPDF() {
+            fillContractOnly();
+            const pdf = new jspdf.jsPDF('p', 'px', [794, 1123]);
+            
+            // 第一页
+            const canvas1 = await html2canvas(document.getElementById('contractPage1'), {
+                scale: 4,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#fff',
+                letterRendering: true,
+                logging: false,
+                timeout: 10000,
+                imageTimeout: 10000,
+                onclone: (cloneDoc) => {
+                    const contractClone = cloneDoc.getElementById('contractPage1');
+                    contractClone.style.backgroundImage = 'url("https://17440061.s21i.faiusr.com/2/ABUIABACGAAg55i5ywYo8KSSuwEwmiU4zzQ.jpg")';
+                    contractClone.style.backgroundSize = 'cover';
+                }
+            });
+            pdf.addImage(canvas1.toDataURL('image/png', 1.0), 'PNG', 0, 0, 794, 1123, '', 'NONE');
+            pdf.addPage();
+            
+            // 第二页
+            const canvas2 = await html2canvas(document.getElementById('contractPage2'), {
+                scale: 4,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#fff',
+                letterRendering: true,
+                logging: false,
+                timeout: 10000,
+                imageTimeout: 10000,
+                onclone: (cloneDoc) => {
+                    const contractClone = cloneDoc.getElementById('contractPage2');
+                    contractClone.style.backgroundImage = 'url("https://17440061.s21i.faiusr.com/2/ABUIABACGAAggZm5ywYouM2KuQEwmiU4zzQ.png")';
+                    contractClone.style.backgroundSize = 'cover';
+                }
+            });
+            pdf.addImage(canvas2.toDataURL('image/png', 1.0), 'PNG', 0, 0, 794, 1123, '', 'NONE');
+            
+            const contractPdfName = `${document.getElementById('payer').value} ${document.getElementById('billNo').value} 合同.pdf`;
+            pdf.save(contractPdfName);
+        }
+
+        // 更新所有预览数据
+        function updateAll() {
+            const currency = document.getElementById('currency').value;
+            const amountNum = parseFloat(document.getElementById('amountNum').value).toFixed(2);
+            const amountLText = `${currency} ${amountNum}`;
+            numToChinese();
+            
+            // 票据预览更新
+            document.getElementById('t_date').innerText = document.getElementById('date').value;
+            document.getElementById('t_billNo').innerText = document.getElementById('billNo').value;
+            document.getElementById('t_queryCode').innerText = document.getElementById('queryCode').value;
+            document.getElementById('t_payer').innerText = document.getElementById('payer').value;
+            document.getElementById('t_payment').innerText = document.getElementById('payment').value;
+            document.getElementById('t_amountL').innerText = amountLText;
+            document.getElementById('t_amountU').innerText = document.getElementById('amountU').value;
+            document.getElementById('t_remark1').innerText = document.getElementById('remark1').value;
+            document.getElementById('t_remark2').innerText = document.getElementById('remark2').value;
+            
+            // 合同预览更新
+            const payer = document.getElementById('payer').value;
+            const payerLines = document.querySelectorAll('#c_payer span');
+            payerLines[0].innerText = payer.length > 8 ? payer.substring(0, 8) : payer;
+            payerLines[1].innerText = payer.length > 8 ? payer.substring(8) : '';
+            document.getElementById('c_billNo').innerText = document.getElementById('billNo').value;
+            document.getElementById('c_seller').innerText = document.getElementById('seller').value || '唐雪松';
+            document.getElementById('c_freight').innerText = document.getElementById('freight').value;
+            document.getElementById('c_additional').innerText = document.getElementById('remark1').value || '无';
+            
+            // 更新一维条码（仅显示条码密文）
+            setTimeout(generateBarcode, 50);
+        }
+
+        // ========== 本地存储功能（不改动） ==========
+        // 保存数据到本地（LocalStorage）
+        function saveToLocal() {
+            const formData = {
+                提交时间: new Date().toLocaleString(),
+                票据编号: document.getElementById('billNo').value,
+                日期: document.getElementById('date').value,
+                查询码: document.getElementById('queryCode').value,
+                付款人甲方: document.getElementById('payer').value,
+                收款人乙方: document.getElementById('seller').value || '唐雪松',
+                款项内容: document.getElementById('payment').value,
+                货币类型: document.getElementById('currency').value,
+                金额小写: parseFloat(document.getElementById('amountNum').value).toFixed(2),
+                金额大写: document.getElementById('amountU').value,
+                总价含运费: document.getElementById('freight').value,
+                备注1补充: document.getElementById('remark1').value || '无',
+                备注2须知: document.getElementById('remark2').value,
+                条码密文: generateEncryptedBarcodeContent()
+            };
+
+            // 读取本地已有数据
+            let localData = JSON.parse(localStorage.getItem('maopipi_bill_data') || '[]');
+            
+            // 检查票据编号是否重复
+            if (localData.some(item => item.票据编号 === formData.票据编号)) {
+                alert('票据编号已存在！请勿重复保存');
+                return;
+            }
+
+            // 添加新数据并保存
+            localData.push(formData);
+            localStorage.setItem('maopipi_bill_data', JSON.stringify(localData));
+
+            // 显示提示
+            const toast = document.getElementById('submitToast');
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 3000);
+        }
+
+        // 查看本地存储数据
+        function viewLocalRecords() {
+            let localData = JSON.parse(localStorage.getItem('maopipi_bill_data') || '[]');
+            const recordList = document.getElementById('recordList');
+            const modal = document.getElementById('recordModal');
+
+            if (localData.length === 0) {
+                recordList.innerHTML = '<p style="text-align:center; padding:20px;">暂无本地台账记录</p>';
+                modal.style.display = 'block';
+                return;
+            }
+
+            // 按提交时间倒序排序
+            localData.sort((a, b) => new Date(b.提交时间) - new Date(a.提交时间));
+            
+            let html = '';
+            localData.forEach((record, index) => {
+                html += `
+                    <div class="record-item">
+                        <div class="record-header">记录 ${index + 1} - 提交时间：${record.提交时间}</div>
+                        <div class="record-detail">
+                            <p>票据编号：${record.票据编号}</p>
+                            <p>日期：${record.日期} | 查询码：${record.查询码}</p>
+                            <p>甲方：${record.付款人甲方} | 乙方：${record.收款人乙方}</p>
+                            <p>款项：${record.款项内容} | 货币：${record.货币类型}</p>
+                            <p>金额：${record.金额小写}（${record.金额大写}）</p>
+                            <p>含运费：${record.总价含运费}</p>
+                            <p>备注1：${record.备注1补充}</p>
+                            <p>备注2：${record.备注2须知}</p>
+                            <p>条码密文：${record.条码密文}</p>
+                        </div>
+                    </div>
+                `;
+            });
+            recordList.innerHTML = html;
+            modal.style.display = 'block';
+        }
+
+        // 导出本地数据为JSON文件
+        function exportLocalRecords() {
+            let localData = JSON.parse(localStorage.getItem('maopipi_bill_data') || '[]');
+            
+            if (localData.length === 0) {
+                alert('暂无本地台账记录可导出！');
+                return;
+            }
+
+            // 按提交时间倒序排序
+            localData.sort((a, b) => new Date(b.提交时间) - new Date(a.提交时间));
+            
+            // 生成JSON文件并下载
+            const dataStr = JSON.stringify(localData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json; charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `宠物合同本地台账_${new Date().toLocaleDateString().replace(/\//g, '-')}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            alert('本地台账记录已导出为JSON文件！');
+        }
+
+        // 关闭弹窗
+        function closeRecordModal() {
+            document.getElementById('recordModal').style.display = 'none';
+        }
+
+        // 点击弹窗外部关闭
+        window.onclick = function(event) {
+            const modal = document.getElementById('recordModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // 页面加载初始化（引入CryptoJS用于加密）
+        window.onload = function() {
+            // 动态引入CryptoJS（SHA256加密依赖）
+            if (typeof CryptoJS === 'undefined') {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js';
+                script.onload = initPage;
+                document.head.appendChild(script);
+            } else {
+                initPage();
+            }
+        }
+
+        function initPage() {
+            // 初始化查询码
+            document.getElementById('queryCode').value = generateQueryCode();
+            // 初始化票据编号
+            updateBillCodePrefix();
+            formatBillCodeSuffix();
+            // 初始化金额大写
+            numToChinese();
+            // 初始化一维条码（仅显示条码密文）
+            setTimeout(() => {
+                updateAll();
+                generateBarcode();
+            }, 100);
+        }
+    </script>
+</body>
+</html>
